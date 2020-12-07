@@ -1,3 +1,65 @@
+# peterd's fork
+
+Now you can replace `a->x` with `a.x`:
+
+```c
+#include <stdio.h>
+
+struct vec3 {
+	float x, y, z;
+};
+
+void add(struct vec3* a, struct vec3* b) {
+	a.x += b.x;
+	a.y += b.y;
+	a.z += b.z;
+}
+
+int main() {
+	struct vec3 a = { 1.0f, 2.0f, 3.0f };
+	struct vec3 b = a;
+	add(&a, &b);
+	printf("%f %f %f\n", a.x, a.y, a.z);
+}
+```
+
+Another example: you can explicitly reference `this` everywhere, if you want:
+
+```cpp
+#include <cstdio>
+#include <cstdlib>
+
+template<typename T>
+struct Vec {
+	T* ptr;
+	int len;
+	int cap;
+
+	auto append(T elem) -> void {
+		if (this.len >= this.cap) {
+			this.cap = this.cap ? this.cap * 2 : 16;
+			this.ptr = (T*)realloc(this.ptr, sizeof(T) * this.cap);
+		}
+		this.ptr[this.len++] = elem;
+	}
+
+	auto operator[](int i) -> T& {
+		return this.ptr[i];
+	}
+};
+
+int main() {
+	auto v = Vec<int>{};
+	v.append(1);
+	v.append(2);
+	v.append(3);
+
+	for (int i = 0; i < v.len; i++) {
+		printf("%d\n", v[i]);
+	}
+}
+```
+
 # The LLVM Compiler Infrastructure
 
 This directory and its sub-directories contain source code for LLVM,
