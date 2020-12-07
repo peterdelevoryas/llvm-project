@@ -1254,18 +1254,13 @@ static ExprResult LookupMemberExpr(Sema &S, LookupResult &R,
 
   QualType BaseType = BaseExpr.get()->getType();
   assert(!BaseType->isDependentType());
+  //printf("BaseType %s\n", BaseType.getAsString().data());
 
   DeclarationName MemberName = R.getLookupName();
   SourceLocation MemberLoc = R.getNameLoc();
 
-  // For later type-checking purposes, turn arrow accesses into dot
-  // accesses.  The only access type we support that doesn't follow
-  // the C equivalence "a->b === (*a).b" is ObjC property accesses,
-  // and those never use arrows, so this is unaffected.
   if (IsArrow) {
-    if (const PointerType *Ptr = BaseType->getAs<PointerType>())
-      BaseType = Ptr->getPointeeType();
-    else if (const ObjCObjectPointerType *Ptr
+    if (const ObjCObjectPointerType *Ptr
                = BaseType->getAs<ObjCObjectPointerType>())
       BaseType = Ptr->getPointeeType();
     else if (BaseType->isRecordType()) {
@@ -1291,8 +1286,25 @@ static ExprResult LookupMemberExpr(Sema &S, LookupResult &R,
     }
   }
 
+  // For later type-checking purposes, turn arrow accesses into dot
+  // accesses.  The only access type we support that doesn't follow
+  // the C equivalence "a->b === (*a).b" is ObjC property accesses,
+  // and those never use arrows, so this is unaffected.
+  if (const PointerType *Ptr = BaseType->getAs<PointerType>()) {
+    BaseType = Ptr->getPointeeType();
+    //printf("HELLO POINTER: %s\n", BaseType.getAsString().data());
+
+    auto expr2 = static_cast<BinaryOperator*>(BaseExpr.get());
+    auto string = expr2->getOpcodeStr();
+    //printf("Opcode = %.*s\n", string.size(), string.begin());
+    //expr2->setOpcode(BO_PtrMemI);
+    expr2->setValueKind(VK_RValue);
+    IsArrow = true;
+  }
+
   // Handle field access to simple records.
   if (const RecordType *RTy = BaseType->getAs<RecordType>()) {
+    //printf("lookup member expr in record\n");
     TypoExpr *TE = nullptr;
     if (LookupMemberExprInRecord(S, R, BaseExpr.get(), RTy, OpLoc, IsArrow, SS,
                                  HasTemplateArgs, TemplateKWLoc, TE))
@@ -1629,6 +1641,9 @@ static ExprResult LookupMemberExpr(Sema &S, LookupResult &R,
 
   // Failure cases.
  fail:
+
+ //printf("HELLO WORLD\n");
+ //printf("IsArrow %d\n", IsArrow);
 
   // Recover from dot accesses to pointers, e.g.:
   //   type *foo;
