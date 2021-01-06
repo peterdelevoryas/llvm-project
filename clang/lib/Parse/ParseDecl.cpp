@@ -6464,7 +6464,68 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
   LParenLoc = Tracker.getOpenLocation();
   StartLoc = LParenLoc;
 
-  if (isFunctionDeclaratorIdentifierList()) {
+  if (Tok.is(tok::identifier) && NextToken().is(tok::colon)) {
+    do {
+      DeclSpec DS2(AttrFactory);
+      Declarator D2(DS2, D.getContext());
+
+      //IdentifierInfo* Id = Tok.getIdentifierInfo();
+      //SourceLocation IdLoc = ConsumeToken();
+      //D2.getName().setIdentifier(Id, IdLoc);
+      D2.SetIdentifier(Tok.getIdentifierInfo(), Tok.getLocation());
+      D2.SetRangeEnd(Tok.getLocation());
+      ConsumeToken();
+
+      SourceLocation colon_loc;
+      TryConsumeToken(tok::colon, colon_loc);
+
+      while (Tok.is(tok::star)) {
+          SourceLocation Loc = ConsumeToken();
+          D2.AddTypeInfo(
+              DeclaratorChunk::getPointer(
+                  DS2.getTypeQualifiers(),
+                  Loc,
+                  DS2.getConstSpecLoc(),
+                  DS2.getVolatileSpecLoc(),
+                  DS2.getRestrictSpecLoc(),
+                  DS2.getAtomicSpecLoc(),
+                  DS2.getUnalignedSpecLoc()
+              ),
+              Loc
+          );
+      }
+      ParseDeclarationSpecifiers(DS2);
+
+      Decl* D2_decl = Actions.ActOnParamDeclarator(getCurScope(), D2);
+
+      ParamInfo.push_back(
+          DeclaratorChunk::ParamInfo(
+              D2.getIdentifier(),
+              D2.getIdentifierLoc(),
+              D2_decl
+          )
+      );
+    } while (TryConsumeToken(tok::comma));
+
+    Tracker.consumeClose();
+    RParenLoc = Tracker.getCloseLocation();
+    LocalEndLoc = RParenLoc;
+    EndLoc = RParenLoc;
+
+    // Parse trailing-return-type[opt].
+    LocalEndLoc = EndLoc;
+    if (Tok.is(tok::arrow)) {
+      if (D.getDeclSpec().getTypeSpecType() == TST_auto)
+        StartLoc = D.getDeclSpec().getTypeSpecTypeLoc();
+      LocalEndLoc = Tok.getLocation();
+      SourceRange Range;
+      TrailingReturnType =
+          ParseTrailingReturnType(Range, D.mayBeFollowedByCXXDirectInit());
+      TrailingReturnTypeLoc = Range.getBegin();
+      EndLoc = Range.getEnd();
+    }
+
+  } else if (isFunctionDeclaratorIdentifierList()) {
     if (RequiresArg)
       Diag(Tok, diag::err_argument_required_after_attribute);
 
@@ -6849,6 +6910,7 @@ void Parser::ParseParameterDeclarationClause(
           ConsumeToken();
         }
       }
+
       // Inform the actions module about the parameter declarator, so it gets
       // added to the current scope.
       Decl *Param = Actions.ActOnParamDeclarator(getCurScope(), ParmDeclarator);
