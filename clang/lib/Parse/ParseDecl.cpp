@@ -6405,6 +6405,19 @@ void Parser::InitCXXThisScopeForDeclaratorIfRelevant(
                     IsCXX11MemberFunction);
 }
 
+TypeResult parse_type_name2(Parser& p, DeclaratorContext context) {
+    DeclSpec decl_spec(p.getAttrFactory());
+    Declarator decl(decl_spec, context);
+
+    return p.getActions().ActOnTypeName(p.getCurScope(), decl);
+}
+
+TypeResult parse_trailing_return_type(Parser& p) {
+    assert(p.Tok.is(tok::arrow) && "expected arrow");
+    p.ConsumeToken();
+    return parse_type_name2(p, DeclaratorContext::TrailingReturn);
+}
+
 /// ParseFunctionDeclarator - We are after the identifier and have parsed the
 /// declarator D up to a paren, which indicates that we are parsing function
 /// arguments.
@@ -6519,8 +6532,8 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
         StartLoc = D.getDeclSpec().getTypeSpecTypeLoc();
       LocalEndLoc = Tok.getLocation();
       SourceRange Range;
-      TrailingReturnType =
-          ParseTrailingReturnType(Range, D.mayBeFollowedByCXXDirectInit());
+      //TrailingReturnType = parse_trailing_return_type(*this);
+      TrailingReturnType = ParseTrailingReturnType(Range, D.mayBeFollowedByCXXDirectInit());
       TrailingReturnTypeLoc = Range.getBegin();
       EndLoc = Range.getEnd();
     }
