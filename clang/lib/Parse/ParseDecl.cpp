@@ -3588,6 +3588,10 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
                                            PrevSpec, DiagID, Policy);
       isStorageClass = true;
       break;
+    case tok::kw_var:
+      isInvalid = DS.SetTypeSpecType(DeclSpec::TST_auto, Loc, PrevSpec, DiagID, Policy);
+      isStorageClass = true;
+      break;
     case tok::kw___auto_type:
       Diag(Tok, diag::ext_auto_type);
       isInvalid = DS.SetTypeSpecType(DeclSpec::TST_auto_type, Loc, PrevSpec,
@@ -5148,6 +5152,8 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw__Decimal64:
   case tok::kw__Decimal128:
   case tok::kw___vector:
+
+  case tok::kw_var:
 
     // struct-or-union-specifier (C99) or class-specifier (C++)
   case tok::kw_class:

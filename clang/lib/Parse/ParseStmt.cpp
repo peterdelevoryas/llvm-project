@@ -20,6 +20,9 @@
 #include "clang/Sema/DeclSpec.h"
 #include "clang/Sema/Scope.h"
 #include "clang/Sema/TypoCorrection.h"
+
+#include <stdio.h>
+
 using namespace clang;
 
 //===----------------------------------------------------------------------===//

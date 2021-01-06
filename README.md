@@ -60,6 +60,18 @@ int main() {
 }
 ```
 
+Also, I went ahead and added the keyword `var` to do the
+same thing as `auto`, and allowed in C as well.
+
+```
+#include <stdio.h>
+
+int main() {
+    var x = 2;
+    printf("%d\n", x);
+}
+```
+
 # The LLVM Compiler Infrastructure
 
 This directory and its sub-directories contain source code for LLVM,

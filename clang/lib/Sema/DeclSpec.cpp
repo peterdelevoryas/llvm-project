@@ -1345,10 +1345,6 @@ void DeclSpec::Finish(Sema &S, const PrintingPolicy &Policy) {
     TSTLoc = TSTNameLoc = StorageClassSpecLoc;
     StorageClassSpecLoc = SourceLocation();
   }
-  // Diagnose if we've recovered from an ill-formed 'auto' storage class
-  // specifier in a pre-C++11 dialect of C++.
-  if (!S.getLangOpts().CPlusPlus11 && TypeSpecType == TST_auto)
-    S.Diag(TSTLoc, diag::ext_auto_type_specifier);
   if (S.getLangOpts().CPlusPlus && !S.getLangOpts().CPlusPlus11 &&
       StorageClassSpec == SCS_auto)
     S.Diag(StorageClassSpecLoc, diag::warn_auto_storage_class)
