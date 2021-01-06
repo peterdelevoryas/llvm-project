@@ -1,76 +1,51 @@
 # peterd's fork
 
-Now you can replace `a->x` with `a.x`:
-
-```c
-#include <stdio.h>
-
-struct vec3 {
-	float x, y, z;
-};
-
-void add(struct vec3* a, struct vec3* b) {
-	a.x += b.x;
-	a.y += b.y;
-	a.z += b.z;
-}
-
-int main() {
-	struct vec3 a = { 1.0f, 2.0f, 3.0f };
-	struct vec3 b = a;
-	add(&a, &b);
-	printf("%f %f %f\n", a.x, a.y, a.z);
-}
-```
-
-Another example: you can explicitly reference `this` everywhere, if you want:
-
-```cpp
-#include <cstdio>
-#include <cstdlib>
-
-template<typename T>
-struct Vec {
-	T* ptr;
-	int len;
-	int cap;
-
-	auto append(T elem) -> void {
-		if (this.len >= this.cap) {
-			this.cap = this.cap ? this.cap * 2 : 16;
-			this.ptr = (T*)realloc(this.ptr, sizeof(T) * this.cap);
-		}
-		this.ptr[this.len++] = elem;
-	}
-
-	auto operator[](int i) -> T& {
-		return this.ptr[i];
-	}
-};
-
-int main() {
-	auto v = Vec<int>{};
-	v.append(1);
-	v.append(2);
-	v.append(3);
-
-	for (int i = 0; i < v.len; i++) {
-		printf("%d\n", v[i]);
-	}
-}
-```
-
-Also, I went ahead and added the keyword `var` to do the
-same thing as `auto`, and allowed in C as well.
+This fork hacks auto-deref and some syntax changes onto C:
 
 ```
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <errno.h>
 
-int main() {
-    var x = 2;
-    printf("%d\n", x);
+typedef char i8;
+typedef int i32;
+
+fn read_file(path: *i8) -> i8* {
+    var file = fopen(path, "rb");
+    if !file {
+        printf("unable to open '%s': %s\n", path, strerror(errno));
+        return NULL;
+    }
+
+    fseek(file, 0, SEEK_END);
+    var size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    var text = (i8*)malloc(size + 1);
+    assert(text);
+
+    assert(fread(text, size, 1, file) == 1);
+    text[size] = 0;
+
+    fclose(file);
+    return text;
+}
+
+fn main(argc: i32, argv: **i8) -> i32 {
+    var path = argv[1];
+    var text = read_file(path);
+    if !text {
+        return 1;
+    }
+    printf("%s\n", text);
 }
 ```
+
+If you're not familiar, auto-deref in Rust and Go and other languages
+lets you use `.` instead of `->`, it just makes the `.` operator do the
+same thing automatically.
 
 # The LLVM Compiler Infrastructure
 
