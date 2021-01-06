@@ -1186,7 +1186,8 @@ bool Parser::ParseParenExprOrCondition(StmtResult *InitStmt,
                                        SourceLocation *LParenLoc,
                                        SourceLocation *RParenLoc) {
   BalancedDelimiterTracker T(*this, tok::l_paren);
-  T.consumeOpen();
+  if (Tok.is(tok::l_paren))
+    T.consumeOpen();
 
   if (getLangOpts().CPlusPlus)
     Cond = ParseCXXCondition(InitStmt, Loc, CK);
@@ -1211,8 +1212,9 @@ bool Parser::ParseParenExprOrCondition(StmtResult *InitStmt,
       return true;
   }
 
-  // Otherwise the condition is valid or the rparen is present.
-  T.consumeClose();
+  if (Tok.is(tok::r_paren))
+    // Otherwise the condition is valid or the rparen is present.
+    T.consumeClose();
 
   if (LParenLoc != nullptr) {
     *LParenLoc = T.getOpenLocation();
@@ -1344,12 +1346,6 @@ StmtResult Parser::ParseIfStatement(SourceLocation *TrailingElseLoc) {
                                         : diag::ext_constexpr_if);
     IsConstexpr = true;
     ConsumeToken();
-  }
-
-  if (Tok.isNot(tok::l_paren)) {
-    Diag(Tok, diag::err_expected_lparen_after) << "if";
-    SkipUntil(tok::semi);
-    return StmtError();
   }
 
   bool C99orCXX = getLangOpts().C99 || getLangOpts().CPlusPlus;
@@ -1589,12 +1585,6 @@ StmtResult Parser::ParseWhileStatement(SourceLocation *TrailingElseLoc) {
   SourceLocation WhileLoc = Tok.getLocation();
   ConsumeToken();  // eat the 'while'.
 
-  if (Tok.isNot(tok::l_paren)) {
-    Diag(Tok, diag::err_expected_lparen_after) << "while";
-    SkipUntil(tok::semi);
-    return StmtError();
-  }
-
   bool C99orCXX = getLangOpts().C99 || getLangOpts().CPlusPlus;
 
   // C99 6.8.5p5 - In C99, the while statement is a block.  This is not
@@ -1708,7 +1698,8 @@ StmtResult Parser::ParseDoStatement() {
 
   // Parse the parenthesized expression.
   BalancedDelimiterTracker T(*this, tok::l_paren);
-  T.consumeOpen();
+  if (Tok.is(tok::l_paren))
+    T.consumeOpen();
 
   // A do-while expression is not a condition, so can't have attributes.
   DiagnoseAndSkipCXX11Attributes();
@@ -1717,7 +1708,8 @@ StmtResult Parser::ParseDoStatement() {
   // Correct the typos in condition before closing the scope.
   if (Cond.isUsable())
     Cond = Actions.CorrectDelayedTyposInExpr(Cond);
-  T.consumeClose();
+  if (Tok.is(tok::r_paren))
+    T.consumeClose();
   DoScope.Exit();
 
   if (Cond.isInvalid() || Body.isInvalid())
@@ -1776,12 +1768,6 @@ StmtResult Parser::ParseForStatement(SourceLocation *TrailingElseLoc) {
   if (Tok.is(tok::kw_co_await))
     CoawaitLoc = ConsumeToken();
 
-  if (Tok.isNot(tok::l_paren)) {
-    Diag(Tok, diag::err_expected_lparen_after) << "for";
-    SkipUntil(tok::semi);
-    return StmtError();
-  }
-
   bool C99orCXXorObjC = getLangOpts().C99 || getLangOpts().CPlusPlus ||
     getLangOpts().ObjC;
 
@@ -1807,7 +1793,8 @@ StmtResult Parser::ParseForStatement(SourceLocation *TrailingElseLoc) {
   ParseScope ForScope(this, ScopeFlags);
 
   BalancedDelimiterTracker T(*this, tok::l_paren);
-  T.consumeOpen();
+  if (Tok.is(tok::l_paren))
+    T.consumeOpen();
 
   ExprResult Value;
 
@@ -2016,8 +2003,9 @@ StmtResult Parser::ParseForStatement(SourceLocation *TrailingElseLoc) {
       ThirdPart = Actions.MakeFullDiscardedValueExpr(Third.get());
     }
   }
-  // Match the ')'.
-  T.consumeClose();
+  if (Tok.is(tok::r_paren))
+    // Match the ')'.
+    T.consumeClose();
 
   // C++ Coroutines [stmt.iter]:
   //   'co_await' can only be used for a range-based for statement.
