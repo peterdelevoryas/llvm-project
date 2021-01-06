@@ -3589,6 +3589,7 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       isStorageClass = true;
       break;
     case tok::kw_var:
+    case tok::kw_fn:
       isInvalid = DS.SetTypeSpecType(DeclSpec::TST_auto, Loc, PrevSpec, DiagID, Policy);
       isStorageClass = true;
       break;
@@ -5154,6 +5155,7 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw___vector:
 
   case tok::kw_var:
+  case tok::kw_fn:
 
     // struct-or-union-specifier (C99) or class-specifier (C++)
   case tok::kw_class:
@@ -6493,81 +6495,76 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
     LocalEndLoc = RParenLoc;
     EndLoc = RParenLoc;
 
-    if (getLangOpts().CPlusPlus) {
-      // FIXME: Accept these components in any order, and produce fixits to
-      // correct the order if the user gets it wrong. Ideally we should deal
-      // with the pure-specifier in the same way.
+    // FIXME: Accept these components in any order, and produce fixits to
+    // correct the order if the user gets it wrong. Ideally we should deal
+    // with the pure-specifier in the same way.
 
-      // Parse cv-qualifier-seq[opt].
-      ParseTypeQualifierListOpt(DS, AR_NoAttributesParsed,
-                                /*AtomicAllowed*/ false,
-                                /*IdentifierRequired=*/false,
-                                llvm::function_ref<void()>([&]() {
-                                  Actions.CodeCompleteFunctionQualifiers(DS, D);
-                                }));
-      if (!DS.getSourceRange().getEnd().isInvalid()) {
-        EndLoc = DS.getSourceRange().getEnd();
-      }
+    // Parse cv-qualifier-seq[opt].
+    ParseTypeQualifierListOpt(DS, AR_NoAttributesParsed,
+                              /*AtomicAllowed*/ false,
+                              /*IdentifierRequired=*/false,
+                              llvm::function_ref<void()>([&]() {
+                                Actions.CodeCompleteFunctionQualifiers(DS, D);
+                              }));
+    if (!DS.getSourceRange().getEnd().isInvalid()) {
+      EndLoc = DS.getSourceRange().getEnd();
+    }
 
-      // Parse ref-qualifier[opt].
-      if (ParseRefQualifier(RefQualifierIsLValueRef, RefQualifierLoc))
-        EndLoc = RefQualifierLoc;
+    // Parse ref-qualifier[opt].
+    if (ParseRefQualifier(RefQualifierIsLValueRef, RefQualifierLoc))
+      EndLoc = RefQualifierLoc;
 
-      llvm::Optional<Sema::CXXThisScopeRAII> ThisScope;
-      InitCXXThisScopeForDeclaratorIfRelevant(D, DS, ThisScope);
+    llvm::Optional<Sema::CXXThisScopeRAII> ThisScope;
+    InitCXXThisScopeForDeclaratorIfRelevant(D, DS, ThisScope);
 
-      // Parse exception-specification[opt].
-      // FIXME: Per [class.mem]p6, all exception-specifications at class scope
-      // should be delayed, including those for non-members (eg, friend
-      // declarations). But only applying this to member declarations is
-      // consistent with what other implementations do.
-      bool Delayed = D.isFirstDeclarationOfMember() &&
-                     D.isFunctionDeclaratorAFunctionDeclaration();
-      if (Delayed && Actions.isLibstdcxxEagerExceptionSpecHack(D) &&
-          GetLookAheadToken(0).is(tok::kw_noexcept) &&
-          GetLookAheadToken(1).is(tok::l_paren) &&
-          GetLookAheadToken(2).is(tok::kw_noexcept) &&
-          GetLookAheadToken(3).is(tok::l_paren) &&
-          GetLookAheadToken(4).is(tok::identifier) &&
-          GetLookAheadToken(4).getIdentifierInfo()->isStr("swap")) {
-        // HACK: We've got an exception-specification
-        //   noexcept(noexcept(swap(...)))
-        // or
-        //   noexcept(noexcept(swap(...)) && noexcept(swap(...)))
-        // on a 'swap' member function. This is a libstdc++ bug; the lookup
-        // for 'swap' will only find the function we're currently declaring,
-        // whereas it expects to find a non-member swap through ADL. Turn off
-        // delayed parsing to give it a chance to find what it expects.
-        Delayed = false;
-      }
-      ESpecType = tryParseExceptionSpecification(Delayed,
-                                                 ESpecRange,
-                                                 DynamicExceptions,
-                                                 DynamicExceptionRanges,
-                                                 NoexceptExpr,
-                                                 ExceptionSpecTokens);
-      if (ESpecType != EST_None)
-        EndLoc = ESpecRange.getEnd();
+    // Parse exception-specification[opt].
+    // FIXME: Per [class.mem]p6, all exception-specifications at class scope
+    // should be delayed, including those for non-members (eg, friend
+    // declarations). But only applying this to member declarations is
+    // consistent with what other implementations do.
+    bool Delayed = D.isFirstDeclarationOfMember() &&
+                   D.isFunctionDeclaratorAFunctionDeclaration();
+    if (Delayed && Actions.isLibstdcxxEagerExceptionSpecHack(D) &&
+        GetLookAheadToken(0).is(tok::kw_noexcept) &&
+        GetLookAheadToken(1).is(tok::l_paren) &&
+        GetLookAheadToken(2).is(tok::kw_noexcept) &&
+        GetLookAheadToken(3).is(tok::l_paren) &&
+        GetLookAheadToken(4).is(tok::identifier) &&
+        GetLookAheadToken(4).getIdentifierInfo()->isStr("swap")) {
+      // HACK: We've got an exception-specification
+      //   noexcept(noexcept(swap(...)))
+      // or
+      //   noexcept(noexcept(swap(...)) && noexcept(swap(...)))
+      // on a 'swap' member function. This is a libstdc++ bug; the lookup
+      // for 'swap' will only find the function we're currently declaring,
+      // whereas it expects to find a non-member swap through ADL. Turn off
+      // delayed parsing to give it a chance to find what it expects.
+      Delayed = false;
+    }
+    ESpecType = tryParseExceptionSpecification(Delayed,
+                                               ESpecRange,
+                                               DynamicExceptions,
+                                               DynamicExceptionRanges,
+                                               NoexceptExpr,
+                                               ExceptionSpecTokens);
+    if (ESpecType != EST_None)
+      EndLoc = ESpecRange.getEnd();
 
-      // Parse attribute-specifier-seq[opt]. Per DR 979 and DR 1297, this goes
-      // after the exception-specification.
-      MaybeParseCXX11Attributes(FnAttrs);
+    // Parse attribute-specifier-seq[opt]. Per DR 979 and DR 1297, this goes
+    // after the exception-specification.
+    MaybeParseCXX11Attributes(FnAttrs);
 
-      // Parse trailing-return-type[opt].
-      LocalEndLoc = EndLoc;
-      if (getLangOpts().CPlusPlus11 && Tok.is(tok::arrow)) {
-        Diag(Tok, diag::warn_cxx98_compat_trailing_return_type);
-        if (D.getDeclSpec().getTypeSpecType() == TST_auto)
-          StartLoc = D.getDeclSpec().getTypeSpecTypeLoc();
-        LocalEndLoc = Tok.getLocation();
-        SourceRange Range;
-        TrailingReturnType =
-            ParseTrailingReturnType(Range, D.mayBeFollowedByCXXDirectInit());
-        TrailingReturnTypeLoc = Range.getBegin();
-        EndLoc = Range.getEnd();
-      }
-    } else if (standardAttributesAllowed()) {
-      MaybeParseCXX11Attributes(FnAttrs);
+    // Parse trailing-return-type[opt].
+    LocalEndLoc = EndLoc;
+    if (Tok.is(tok::arrow)) {
+      if (D.getDeclSpec().getTypeSpecType() == TST_auto)
+        StartLoc = D.getDeclSpec().getTypeSpecTypeLoc();
+      LocalEndLoc = Tok.getLocation();
+      SourceRange Range;
+      TrailingReturnType =
+          ParseTrailingReturnType(Range, D.mayBeFollowedByCXXDirectInit());
+      TrailingReturnTypeLoc = Range.getBegin();
+      EndLoc = Range.getEnd();
     }
   }
 
