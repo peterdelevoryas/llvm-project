@@ -4116,6 +4116,37 @@ void Parser::ParseStructDeclaration(
     return ParseStructDeclaration(DS, FieldsCallback);
   }
 
+  if (Tok.is(tok::identifier) && NextToken().is(tok::colon)) {
+    ParsingFieldDeclarator DeclaratorInfo(*this, DS);
+
+    DeclaratorInfo.D.SetIdentifier(Tok.getIdentifierInfo(), Tok.getLocation());
+    DeclaratorInfo.D.SetRangeEnd(Tok.getLocation());
+    ConsumeToken();
+
+    SourceLocation colon_loc;
+    TryConsumeToken(tok::colon, colon_loc);
+
+    while (Tok.is(tok::star)) {
+      SourceLocation Loc = ConsumeToken();
+      DeclaratorInfo.D.AddTypeInfo(
+          DeclaratorChunk::getPointer(
+              DS.getTypeQualifiers(),
+              Loc,
+              DS.getConstSpecLoc(),
+              DS.getVolatileSpecLoc(),
+              DS.getRestrictSpecLoc(),
+              DS.getAtomicSpecLoc(),
+              DS.getUnalignedSpecLoc()
+          ),
+          Loc
+      );
+    }
+    ParseDeclarationSpecifiers(DS);
+
+    FieldsCallback(DeclaratorInfo);
+    return;
+  }
+
   // Parse leading attributes.
   ParsedAttributesWithRange Attrs(AttrFactory);
   MaybeParseCXX11Attributes(Attrs);
