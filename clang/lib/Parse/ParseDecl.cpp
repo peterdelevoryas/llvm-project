@@ -6407,12 +6407,36 @@ void Parser::InitCXXThisScopeForDeclaratorIfRelevant(
 
 TypeResult parse_type_name2(Parser& p, DeclaratorContext context) {
     DeclSpec decl_spec(p.getAttrFactory());
-    Declarator decl(decl_spec, context);
+    Declarator declarator(decl_spec, context);
 
-    return p.getActions().ActOnTypeName(p.getCurScope(), decl);
+    // declarator.SetIdentifier(p.Tok.getIdentifierInfo(), p.Tok.getLocation());
+    // declarator.SetRangeEnd(p.Tok.getLocation());
+    // p.ConsumeToken();
+
+    // SourceLocation colon_loc;
+    // p.TryConsumeToken(tok::colon, colon_loc);
+
+    while (p.Tok.is(tok::star)) {
+        SourceLocation Loc = p.ConsumeToken();
+        declarator.AddTypeInfo(
+            DeclaratorChunk::getPointer(
+                decl_spec.getTypeQualifiers(),
+                Loc,
+                decl_spec.getConstSpecLoc(),
+                decl_spec.getVolatileSpecLoc(),
+                decl_spec.getRestrictSpecLoc(),
+                decl_spec.getAtomicSpecLoc(),
+                decl_spec.getUnalignedSpecLoc()
+            ),
+            Loc
+        );
+    }
+    p.ParseDeclarationSpecifiers(decl_spec);
+
+    return p.getActions().ActOnTypeName(p.getCurScope(), declarator);
 }
 
-TypeResult parse_trailing_return_type(Parser& p) {
+TypeResult parse_trailing_return_type(SourceRange& range, Parser& p) {
     assert(p.Tok.is(tok::arrow) && "expected arrow");
     p.ConsumeToken();
     return parse_type_name2(p, DeclaratorContext::TrailingReturn);
@@ -6532,8 +6556,7 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
         StartLoc = D.getDeclSpec().getTypeSpecTypeLoc();
       LocalEndLoc = Tok.getLocation();
       SourceRange Range;
-      //TrailingReturnType = parse_trailing_return_type(*this);
-      TrailingReturnType = ParseTrailingReturnType(Range, D.mayBeFollowedByCXXDirectInit());
+      TrailingReturnType = parse_trailing_return_type(Range, *this);
       TrailingReturnTypeLoc = Range.getBegin();
       EndLoc = Range.getEnd();
     }

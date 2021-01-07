@@ -1774,7 +1774,6 @@ public:
 
   ExprResult ParseStringLiteralExpression(bool AllowUserDefinedLiteral = false);
 
-private:
   ExprResult ParseExpressionWithLeadingAt(SourceLocation AtLoc);
 
   ExprResult ParseExpressionWithLeadingExtension(SourceLocation ExtLoc);

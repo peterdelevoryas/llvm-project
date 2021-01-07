@@ -12,7 +12,7 @@ This fork hacks auto-deref and some syntax changes onto C:
 typedef char i8;
 typedef int i32;
 
-fn read_file(path: *i8) -> i8* {
+fn read_file(path: *i8) -> *i8 {
     var file = fopen(path, "rb");
     if !file {
         printf("unable to open '%s': %s\n", path, strerror(errno));
