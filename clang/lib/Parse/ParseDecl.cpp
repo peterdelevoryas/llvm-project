@@ -18,6 +18,7 @@
 #include "clang/Basic/AddressSpaces.h"
 #include "clang/Basic/Attributes.h"
 #include "clang/Basic/CharInfo.h"
+#include "clang/Basic/Specifiers.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Parse/ParseDiagnostic.h"
 #include "clang/Sema/Lookup.h"
@@ -4566,9 +4567,9 @@ void Parser::ParseEnumSpecifier(SourceLocation StartLoc, DeclSpec &DS,
   // enum foo {..};  void bar() { enum foo x; }  <- use of old foo.
   //
   Sema::TagUseKind TUK;
-  if (AllowEnumSpecifier == AllowDefiningTypeSpec::No)
+  if (AllowEnumSpecifier == AllowDefiningTypeSpec::No) {
     TUK = Sema::TUK_Reference;
-  else if (Tok.is(tok::l_brace)) {
+  } else if (Tok.is(tok::l_brace)) {
     if (DS.isFriendSpecified()) {
       Diag(Tok.getLocation(), diag::err_friend_decl_defines_type)
         << SourceRange(DS.getFriendSpecLoc());
@@ -6437,6 +6438,7 @@ void Parser::InitCXXThisScopeForDeclaratorIfRelevant(
 }
 
 TypeResult parse_type_name2(Parser& p, DeclaratorContext context) {
+    auto decl_spec_context = p.getDeclSpecContextFromDeclaratorContext(context);
     DeclSpec decl_spec(p.getAttrFactory());
     Declarator declarator(decl_spec, context);
 
@@ -6462,7 +6464,7 @@ TypeResult parse_type_name2(Parser& p, DeclaratorContext context) {
             Loc
         );
     }
-    p.ParseDeclarationSpecifiers(decl_spec);
+    p.ParseDeclarationSpecifiers(decl_spec, Parser::ParsedTemplateInfo(), AS_none, decl_spec_context, nullptr);
 
     return p.getActions().ActOnTypeName(p.getCurScope(), declarator);
 }

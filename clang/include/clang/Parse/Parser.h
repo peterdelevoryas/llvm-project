@@ -1228,7 +1228,6 @@ public:
   /// MisleadingIndentationChecker on an else active, this location is invalid.
   SourceLocation MisleadingIndentationElseLoc;
 
-private:
   //===--------------------------------------------------------------------===//
   // Lexing and parsing of C++ inline methods.
 
