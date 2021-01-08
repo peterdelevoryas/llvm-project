@@ -118,6 +118,9 @@ class Lexer : public PreprocessorLexer {
   // to be lexed.
   const char *BufferPtr;
 
+    int curr_indent = 0;
+    int next_indent = 0;
+
   // IsAtStartOfLine - True if the next lexed token should get the "start of
   // line" flag set on it.
   bool IsAtStartOfLine;

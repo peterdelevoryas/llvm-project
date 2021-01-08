@@ -1216,6 +1216,9 @@ bool Parser::ParseParenExprOrCondition(StmtResult *InitStmt,
     // Otherwise the condition is valid or the rparen is present.
     T.consumeClose();
 
+  if (Tok.is(tok::colon))
+    ConsumeToken();
+
   if (LParenLoc != nullptr) {
     *LParenLoc = T.getOpenLocation();
   }
@@ -1378,6 +1381,9 @@ StmtResult Parser::ParseIfStatement(SourceLocation *TrailingElseLoc) {
   llvm::Optional<bool> ConstexprCondition;
   if (IsConstexpr)
     ConstexprCondition = Cond.getKnownValue();
+
+  if (Tok.is(tok::colon))
+    ConsumeToken();
 
   bool IsBracedThen = Tok.is(tok::l_brace);
 
@@ -2001,6 +2007,9 @@ StmtResult Parser::ParseForStatement(SourceLocation *TrailingElseLoc) {
     // Match the ')'.
     T.consumeClose();
 
+  if (Tok.is(tok::colon))
+      ConsumeToken();
+
   // C++ Coroutines [stmt.iter]:
   //   'co_await' can only be used for a range-based for statement.
   if (CoawaitLoc.isValid() && !ForRangeInfo.ParsedForRangeDecl()) {
@@ -2059,6 +2068,7 @@ StmtResult Parser::ParseForStatement(SourceLocation *TrailingElseLoc) {
     getCurScope()->decrementMSManglingNumber();
 
   MisleadingIndentationChecker MIChecker(*this, MSK_for, ForLoc);
+
 
   // Read the body statement.
   StmtResult Body(ParseStatement(TrailingElseLoc));

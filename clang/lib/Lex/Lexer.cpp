@@ -3205,6 +3205,17 @@ LexNextToken:
   // CurPtr - Cache BufferPtr in an automatic variable.
   const char *CurPtr = BufferPtr;
 
+  if (curr_indent < next_indent) {
+      curr_indent += 1;
+      FormTokenWithChars(Result, CurPtr, tok::l_brace);
+      return true;
+  }
+  if (next_indent < curr_indent) {
+      curr_indent -= 1;
+      FormTokenWithChars(Result, CurPtr, tok::r_brace);
+      return true;
+  }
+
   // Small amounts of horizontal whitespace is very common between tokens.
   if ((*CurPtr == ' ') || (*CurPtr == '\t')) {
     ++CurPtr;
@@ -3295,6 +3306,21 @@ LexNextToken:
 
     // No leading whitespace seen so far.
     Result.clearFlag(Token::LeadingSpace);
+
+    if (curr_indent != 0) {
+        while (*CurPtr == '\n') {
+            ++CurPtr;
+        }
+        BufferPtr = CurPtr;
+        while (*CurPtr == ' ') {
+            ++CurPtr;
+        }
+        next_indent = CurPtr - BufferPtr;
+        assert((next_indent % 4) == 0);
+        next_indent /= 4;
+        BufferPtr = CurPtr;
+        goto LexNextToken;
+    }
 
     if (SkipWhitespace(Result, CurPtr, TokAtPhysicalStartOfLine))
       return true; // KeepWhitespaceMode
@@ -3840,6 +3866,22 @@ LexNextToken:
       CurPtr = ConsumeChar(CurPtr, SizeTmp, Result);
     } else {
       Kind = tok::colon;
+      if (CurPtr[0] == '\n') {
+        FormTokenWithChars(Result, CurPtr, Kind);
+        ++CurPtr;
+        while (*CurPtr == '\n') {
+            ++CurPtr;
+        }
+        BufferPtr = CurPtr;
+        while (*CurPtr == ' ') {
+            ++CurPtr;
+        }
+        next_indent = CurPtr - BufferPtr;
+        assert((next_indent % 4) == 0);
+        next_indent /= 4;
+        BufferPtr = CurPtr;
+        return true;
+      }
     }
     break;
   case ';':

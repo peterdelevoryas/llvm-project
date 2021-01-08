@@ -1965,6 +1965,8 @@ Parser::DeclGroupPtrTy Parser::ParseDeclGroup(ParsingDeclSpec &DS,
       // The C++ inline method definition case is handled elsewhere, so we only
       // need to handle the file scope definition case.
       if (Context == DeclaratorContext::File) {
+        if (Tok.is(tok::colon))
+            ConsumeToken();
         if (isStartOfFunctionDefinition(D)) {
           if (DS.getStorageClassSpec() == DeclSpec::SCS_typedef) {
             Diag(Tok, diag::err_function_declared_typedef);
