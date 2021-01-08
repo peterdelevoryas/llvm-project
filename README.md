@@ -10,7 +10,7 @@ This fork hacks auto-deref and some syntax changes onto C:
 #include <errno.h>
 #include <ctype.h>
 
-fn read_file(path: *const char) -> *char {
+def read_file(path: *const char) -> *char {
     var file = fopen(path, "rb");
     if !file {
         printf("unable to open '%s': %s\n", path, strerror(errno));
@@ -43,11 +43,11 @@ struct string_intern {
     big_string_cap: int;
 };
 
-fn unintern_string(i: int, strings: *struct string_intern) -> *const char {
+def unintern_string(i: int, strings: *struct string_intern) -> *const char {
     return &strings.big_string[i];
 }
 
-fn intern_string(s: *char, n: int, strings: *struct string_intern) -> int {
+def intern_string(s: *char, n: int, strings: *struct string_intern) -> int {
     for var i = 0; i < strings.num_indices; i++ {
         var j = strings.indices[i];
         var p = &strings.big_string[j];
@@ -78,11 +78,11 @@ fn intern_string(s: *char, n: int, strings: *struct string_intern) -> int {
     return i;
 }
 
-fn intern_zstring(s: *char, strings: *struct string_intern) -> int {
+def intern_zstring(s: *char, strings: *struct string_intern) -> int {
     return intern_string(s, strlen(s), strings);
 }
 
-fn main(argc: int, argv: **char) -> int {
+def main(argc: int, argv: **char) -> int {
     if argc < 2 {
         printf("usage: %s file\n", argv[0]);
         return 0;
