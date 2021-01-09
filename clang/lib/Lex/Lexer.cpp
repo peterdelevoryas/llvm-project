@@ -3191,12 +3191,39 @@ bool Lexer::Lex(Token &Result) {
   return returnedToken;
 }
 
+bool Lexer::LexTokenInternal(Token &Result, bool TokAtPhysicalStartOfLine) {
+  bool x = LexTokenInternal_(Result, TokAtPhysicalStartOfLine);
+  prev_token_kind = Result.Kind;
+  return x;
+}
+
+static bool is_end_of_statement(tok::TokenKind kind) {
+  switch (kind) {
+    case tok::r_paren:
+    case tok::r_brace:
+    case tok::r_square:
+    case tok::kw_continue:
+    case tok::kw_break:
+    case tok::kw_return:
+    case tok::kw_this:
+    case tok::kw_true:
+    case tok::kw_false:
+    case tok::identifier:
+    case tok::numeric_constant:
+    case tok::char_constant:
+    case tok::string_literal:
+      return true;
+    default:
+      return false;
+  }
+}
+
 /// LexTokenInternal - This implements a simple C family lexer.  It is an
 /// extremely performance critical piece of code.  This assumes that the buffer
 /// has a null character at the end of the file.  This returns a preprocessing
 /// token, not a normal token, as such, it is an internal interface.  It assumes
 /// that the Flags of result have been cleared before calling this.
-bool Lexer::LexTokenInternal(Token &Result, bool TokAtPhysicalStartOfLine) {
+bool Lexer::LexTokenInternal_(Token &Result, bool TokAtPhysicalStartOfLine) {
 LexNextToken:
   // New token, can't need cleaning yet.
   Result.clearFlag(Token::NeedsCleaning);
@@ -3308,6 +3335,7 @@ LexNextToken:
     Result.clearFlag(Token::LeadingSpace);
 
     if (curr_indent != 0) {
+        auto start = CurPtr - 1;
         while (*CurPtr == '\n') {
             ++CurPtr;
         }
@@ -3319,6 +3347,12 @@ LexNextToken:
         assert((next_indent % 4) == 0);
         next_indent /= 4;
         BufferPtr = CurPtr;
+        if (is_end_of_statement(prev_token_kind)) {
+          Result.setLength(1);
+          Result.setLocation(getSourceLocation(start, 1));
+          Result.setKind(tok::semi);
+          return true;
+        }
         goto LexNextToken;
     }
 

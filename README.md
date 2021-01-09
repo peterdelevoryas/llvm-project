@@ -11,23 +11,23 @@ This fork adds Python syntax to C!
 #include <ctype.h>
 
 def read_file(path: *const char) -> *char:
-    var file = fopen(path, "rb");
+    var file = fopen(path, "rb")
     if !file:
-        printf("unable to open '%s': %s\n", path, strerror(errno));
-        return NULL;
+        printf("unable to open '%s': %s\n", path, strerror(errno))
+        return NULL
 
-    fseek(file, 0, SEEK_END);
-    var size = ftell(file);
-    fseek(file, 0, SEEK_SET);
+    fseek(file, 0, SEEK_END)
+    var size = ftell(file)
+    fseek(file, 0, SEEK_SET)
 
-    var text = (char*) malloc(size + 1);
-    assert(text);
+    var text = (char*) malloc(size + 1)
+    assert(text)
 
-    assert(fread(text, size, 1, file) == 1);
-    text[size] = 0;
+    assert(fread(text, size, 1, file) == 1)
+    text[size] = 0
 
-    fclose(file);
-    return text;
+    fclose(file)
+    return text
 
 struct string_intern {
     // Store indices so that out-of-order processors
@@ -42,71 +42,71 @@ struct string_intern {
 };
 
 def unintern_string(i: int, strings: *struct string_intern) -> *const char:
-    return &strings.big_string[i];
+    return &strings.big_string[i]
 
 def intern_string(s: *char, n: int, strings: *struct string_intern) -> int:
     for var i = 0; i < strings.num_indices; i++:
-        var j = strings.indices[i];
-        var p = &strings.big_string[j];
+        var j = strings.indices[i]
+        var p = &strings.big_string[j]
         if strlen(p) != n:
-            continue;
+            continue
 
         if memcmp(p, s, n) != 0:
-            continue;
+            continue
 
-        return j;
+        return j
 
-    var i = strings.big_string_len;
+    var i = strings.big_string_len
     if i + n + 1 >= strings.big_string_cap:
-        strings.big_string_cap += 4096;
-        strings.big_string = realloc(strings.big_string, strings.big_string_cap);
+        strings.big_string_cap += 4096
+        strings.big_string = realloc(strings.big_string, strings.big_string_cap)
 
-    memcpy(&strings.big_string[i], s, n);
-    strings.big_string[i + n] = 0;
-    strings.big_string_len += n + 1;
+    memcpy(&strings.big_string[i], s, n)
+    strings.big_string[i + n] = 0
+    strings.big_string_len += n + 1
 
     if strings.num_indices >= strings.max_indices:
-        strings.max_indices = strings.max_indices ? strings.max_indices * 2 : 32;
-        strings.indices = realloc(strings.indices, strings.max_indices * sizeof(int));
+        strings.max_indices = strings.max_indices ? strings.max_indices * 2 : 32
+        strings.indices = realloc(strings.indices, strings.max_indices * sizeof(int))
 
-    strings.indices[strings.num_indices++] = i;
+    strings.indices[strings.num_indices++] = i
 
-    return i;
+    return i
 
 def intern_zstring(s: *char, strings: *struct string_intern) -> int:
-    return intern_string(s, strlen(s), strings);
+    return intern_string(s, strlen(s), strings)
 
 def main(argc: int, argv: **char) -> int:
     if argc < 2:
-        printf("usage: %s file\n", argv[0]);
-        return 0;
+        printf("usage: %s file\n", argv[0])
+        return 0
 
-    var text = read_file(argv[1]);
-    printf("%s", text);
+    var text = read_file(argv[1])
+    printf("%s", text)
 
-    var strings = (struct string_intern) {};
+    var strings = (struct string_intern) {}
     for var end = 0; text[end]; end++:
-        var start = end;
+        var start = end
         while 1:
             switch text[end]:
                 case 'a'...'z':
                 case 'A'...'Z':
                 case '0'...'9':
                 case '_':
-                    end += 1;
-                    continue;
+                    end += 1
+                    continue
             break;
 
-        var s = &text[start];
-        var n = end - start;
+        var s = &text[start]
+        var n = end - start
         if n == 0:
-            continue;
-        intern_string(s, n, &strings);
+            continue
+        intern_string(s, n, &strings)
 
     for var i = 0; i < strings.num_indices; i++:
-        var j = strings.indices[i];
-        var p = &strings.big_string[j];
-        printf("%d %d %s\n", i, j, p);
+        var j = strings.indices[i]
+        var p = &strings.big_string[j]
+        printf("%d %d %s\n", i, j, p)
 ```
 
 # The LLVM Compiler Infrastructure

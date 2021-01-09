@@ -31,7 +31,7 @@ class IdentifierInfo;
 /// tokens that were parsed and semantically resolved, e.g.: "foo::MyClass<int>"
 /// can be represented by a single typename annotation token that carries
 /// information about the SourceRange of the tokens and the type object.
-class Token {
+struct Token {
   /// The location of the token. This is actually a SourceLocation.
   unsigned Loc;
 

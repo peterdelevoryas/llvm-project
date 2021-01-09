@@ -121,6 +121,8 @@ class Lexer : public PreprocessorLexer {
     int curr_indent = 0;
     int next_indent = 0;
 
+    tok::TokenKind prev_token_kind = tok::colon;
+
   // IsAtStartOfLine - True if the next lexed token should get the "start of
   // line" flag set on it.
   bool IsAtStartOfLine;
@@ -573,6 +575,7 @@ private:
   /// by Lex.
   ///
   bool LexTokenInternal(Token &Result, bool TokAtPhysicalStartOfLine);
+  bool LexTokenInternal_(Token &Result, bool TokAtPhysicalStartOfLine);
 
   bool CheckUnicodeWhitespace(Token &Result, uint32_t C, const char *CurPtr);
 
