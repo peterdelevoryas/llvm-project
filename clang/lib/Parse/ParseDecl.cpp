@@ -4088,6 +4088,60 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
   }
 }
 
+static auto parse_pointer_declarator_chunk(Parser& P, DeclSpec& DS, Declarator& D) -> void {
+        SourceLocation Loc = P.ConsumeToken();
+        D.AddTypeInfo(
+                DeclaratorChunk::getPointer(
+                        DS.getTypeQualifiers(),
+                        Loc,
+                        DS.getConstSpecLoc(),
+                        DS.getVolatileSpecLoc(),
+                        DS.getRestrictSpecLoc(),
+                        DS.getAtomicSpecLoc(),
+                        DS.getUnalignedSpecLoc()
+                ),
+                Loc
+        );
+}
+
+static auto parse_array_declarator_chunk(Parser& P, DeclSpec& DS, Declarator& D) -> void {
+        BalancedDelimiterTracker T(P, tok::l_square);
+        T.consumeOpen();
+        ExprResult NumElements = P.ParseConstantExpression();
+        T.consumeClose();
+        D.AddTypeInfo(
+                DeclaratorChunk::getArray(
+                        DS.getTypeQualifiers(),
+                        false,
+                        false,
+                        NumElements.get(),
+                        T.getOpenLocation(),
+                        T.getCloseLocation()
+                ),
+                std::move(DS.getAttributes()),
+                T.getCloseLocation()
+        );
+}
+
+// This is my replacement for ParseDeclarationSpecifiers that parses a left-to-right type syntax.
+static auto parse_declaration_specifiers(Parser& P, DeclSpec& DS, Declarator& D, Parser::DeclSpecContext DSC) -> void {
+        for (;;) {
+                switch (P.Tok.Kind) {
+                        case tok::star:
+                                parse_pointer_declarator_chunk(P, DS, D);
+                                continue;
+                        case tok::l_square:
+                                parse_array_declarator_chunk(P, DS, D);
+                                continue;
+                        default:
+                                break;
+                }
+                break;
+        }
+        // FIXME This should be able to be replaced with ParseDirectDeclarator or something? Not sure
+        P.ParseDeclarationSpecifiers(DS, Parser::ParsedTemplateInfo(), AS_none, DSC, nullptr);
+}
+
 /// ParseStructDeclaration - Parse a struct declaration without the terminating
 /// semicolon.
 ///
@@ -4121,34 +4175,21 @@ void Parser::ParseStructDeclaration(
   }
 
   if (Tok.is(tok::identifier) && NextToken().is(tok::colon)) {
-    ParsingFieldDeclarator DeclaratorInfo(*this, DS);
+        ParsingFieldDeclarator DeclaratorInfo(*this, DS);
 
-    DeclaratorInfo.D.SetIdentifier(Tok.getIdentifierInfo(), Tok.getLocation());
-    DeclaratorInfo.D.SetRangeEnd(Tok.getLocation());
-    ConsumeToken();
+        DeclaratorInfo.D.SetIdentifier(Tok.getIdentifierInfo(), Tok.getLocation());
+        DeclaratorInfo.D.SetRangeEnd(Tok.getLocation());
+        ConsumeToken();
 
-    SourceLocation colon_loc;
-    TryConsumeToken(tok::colon, colon_loc);
+        SourceLocation colon_loc;
+        TryConsumeToken(tok::colon, colon_loc);
 
-    while (Tok.is(tok::star)) {
-      SourceLocation Loc = ConsumeToken();
-      DeclaratorInfo.D.AddTypeInfo(
-          DeclaratorChunk::getPointer(
-              DS.getTypeQualifiers(),
-              Loc,
-              DS.getConstSpecLoc(),
-              DS.getVolatileSpecLoc(),
-              DS.getRestrictSpecLoc(),
-              DS.getAtomicSpecLoc(),
-              DS.getUnalignedSpecLoc()
-          ),
-          Loc
-      );
-    }
-    ParseDeclarationSpecifiers(DS);
+        DeclaratorContext DC = DeclaratorInfo.D.getContext();
+        DeclSpecContext DSC = getDeclSpecContextFromDeclaratorContext(DC);
+        parse_declaration_specifiers(*this, DS, DeclaratorInfo.D, DSC);
 
-    FieldsCallback(DeclaratorInfo);
-    return;
+        FieldsCallback(DeclaratorInfo);
+        return;
   }
 
   // Parse leading attributes.
@@ -6441,42 +6482,17 @@ void Parser::InitCXXThisScopeForDeclaratorIfRelevant(
                     IsCXX11MemberFunction);
 }
 
-TypeResult parse_type_name2(Parser& p, DeclaratorContext context) {
-    auto decl_spec_context = p.getDeclSpecContextFromDeclaratorContext(context);
-    DeclSpec decl_spec(p.getAttrFactory());
-    Declarator declarator(decl_spec, context);
+auto parse_trailing_return_type(SourceRange& range, Parser& P) -> TypeResult {
+        assert(P.Tok.is(tok::arrow) && "expected arrow");
+        P.ConsumeToken();
+        DeclaratorContext DC = DeclaratorContext::TrailingReturn;
+        Parser::DeclSpecContext DSC = P.getDeclSpecContextFromDeclaratorContext(DC);
+        DeclSpec DS(P.getAttrFactory());
+        Declarator D(DS, DC);
 
-    // declarator.SetIdentifier(p.Tok.getIdentifierInfo(), p.Tok.getLocation());
-    // declarator.SetRangeEnd(p.Tok.getLocation());
-    // p.ConsumeToken();
+        parse_declaration_specifiers(P, DS, D, DSC);
 
-    // SourceLocation colon_loc;
-    // p.TryConsumeToken(tok::colon, colon_loc);
-
-    while (p.Tok.is(tok::star)) {
-        SourceLocation Loc = p.ConsumeToken();
-        declarator.AddTypeInfo(
-            DeclaratorChunk::getPointer(
-                decl_spec.getTypeQualifiers(),
-                Loc,
-                decl_spec.getConstSpecLoc(),
-                decl_spec.getVolatileSpecLoc(),
-                decl_spec.getRestrictSpecLoc(),
-                decl_spec.getAtomicSpecLoc(),
-                decl_spec.getUnalignedSpecLoc()
-            ),
-            Loc
-        );
-    }
-    p.ParseDeclarationSpecifiers(decl_spec, Parser::ParsedTemplateInfo(), AS_none, decl_spec_context, nullptr);
-
-    return p.getActions().ActOnTypeName(p.getCurScope(), declarator);
-}
-
-TypeResult parse_trailing_return_type(SourceRange& range, Parser& p) {
-    assert(p.Tok.is(tok::arrow) && "expected arrow");
-    p.ConsumeToken();
-    return parse_type_name2(p, DeclaratorContext::TrailingReturn);
+        return P.getActions().ActOnTypeName(P.getCurScope(), D);
 }
 
 /// ParseFunctionDeclarator - We are after the identifier and have parsed the
@@ -6539,65 +6555,50 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
   StartLoc = LParenLoc;
 
   if (Tok.is(tok::identifier) && NextToken().is(tok::colon)) {
-    do {
-      DeclSpec DS2(AttrFactory);
-      Declarator D2(DS2, D.getContext());
+        do {
+                DeclaratorContext DC = D.getContext();
+                DeclSpecContext DSC = getDeclSpecContextFromDeclaratorContext(DC);
 
-      //IdentifierInfo* Id = Tok.getIdentifierInfo();
-      //SourceLocation IdLoc = ConsumeToken();
-      //D2.getName().setIdentifier(Id, IdLoc);
-      D2.SetIdentifier(Tok.getIdentifierInfo(), Tok.getLocation());
-      D2.SetRangeEnd(Tok.getLocation());
-      ConsumeToken();
+                DeclSpec DS2(AttrFactory);
+                Declarator D2(DS2, DC);
 
-      SourceLocation colon_loc;
-      TryConsumeToken(tok::colon, colon_loc);
+                D2.SetIdentifier(Tok.getIdentifierInfo(), Tok.getLocation());
+                D2.SetRangeEnd(Tok.getLocation());
+                ConsumeToken();
 
-      while (Tok.is(tok::star)) {
-          SourceLocation Loc = ConsumeToken();
-          D2.AddTypeInfo(
-              DeclaratorChunk::getPointer(
-                  DS2.getTypeQualifiers(),
-                  Loc,
-                  DS2.getConstSpecLoc(),
-                  DS2.getVolatileSpecLoc(),
-                  DS2.getRestrictSpecLoc(),
-                  DS2.getAtomicSpecLoc(),
-                  DS2.getUnalignedSpecLoc()
-              ),
-              Loc
-          );
-      }
-      ParseDeclarationSpecifiers(DS2);
+                SourceLocation colon_loc;
+                TryConsumeToken(tok::colon, colon_loc);
 
-      Decl* D2_decl = Actions.ActOnParamDeclarator(getCurScope(), D2);
+                parse_declaration_specifiers(*this, DS2, D2, DSC);
 
-      ParamInfo.push_back(
-          DeclaratorChunk::ParamInfo(
-              D2.getIdentifier(),
-              D2.getIdentifierLoc(),
-              D2_decl
-          )
-      );
-    } while (TryConsumeToken(tok::comma));
+                Decl* Param = Actions.ActOnParamDeclarator(getCurScope(), D2);
 
-    Tracker.consumeClose();
-    RParenLoc = Tracker.getCloseLocation();
-    LocalEndLoc = RParenLoc;
-    EndLoc = RParenLoc;
+                ParamInfo.push_back(
+                        DeclaratorChunk::ParamInfo(
+                                D2.getIdentifier(),
+                                D2.getIdentifierLoc(),
+                                Param
+                        )
+                );
+        } while (TryConsumeToken(tok::comma));
 
-    // Parse trailing-return-type[opt].
-    LocalEndLoc = EndLoc;
-    if (Tok.is(tok::arrow)) {
-      if (D.getDeclSpec().getTypeSpecType() == TST_auto)
-        StartLoc = D.getDeclSpec().getTypeSpecTypeLoc();
-      LocalEndLoc = Tok.getLocation();
-      SourceRange Range;
-      TrailingReturnType = parse_trailing_return_type(Range, *this);
-      TrailingReturnTypeLoc = Range.getBegin();
-      EndLoc = Range.getEnd();
-    }
+        Tracker.consumeClose();
+        RParenLoc = Tracker.getCloseLocation();
+        LocalEndLoc = RParenLoc;
+        EndLoc = RParenLoc;
 
+        // Parse trailing-return-type[opt].
+        LocalEndLoc = EndLoc;
+        if (Tok.is(tok::arrow)) {
+                if (D.getDeclSpec().getTypeSpecType() == TST_auto) {
+                        StartLoc = D.getDeclSpec().getTypeSpecTypeLoc();
+                }
+                LocalEndLoc = Tok.getLocation();
+                SourceRange Range;
+                TrailingReturnType = parse_trailing_return_type(Range, *this);
+                TrailingReturnTypeLoc = Range.getBegin();
+                EndLoc = Range.getEnd();
+        }
   } else if (isFunctionDeclaratorIdentifierList()) {
     if (RequiresArg)
       Diag(Tok, diag::err_argument_required_after_attribute);
