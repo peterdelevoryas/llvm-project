@@ -4498,7 +4498,7 @@ void Parser::ParseEnumSpecifier(SourceLocation StartLoc, DeclSpec &DS,
                        ScopedEnumKWLoc.isInvalid() && Name;
 
   // Parse the fixed underlying type.
-  if (Tok.is(tok::colon)) {
+  if (Tok.is(tok::colon) && !NextToken().is(tok::l_brace)) {
     // This might be an enum-base or part of some unrelated enclosing context.
     //
     // 'enum E : base' is permitted in two circumstances:
