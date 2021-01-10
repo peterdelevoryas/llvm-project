@@ -3406,6 +3406,9 @@ private:
   bool parseGNUAsmQualifierListOpt(GNUAsmQualifiers &AQ);
 };
 
+
+auto parse_declaration_specifiers(Parser& P, DeclSpec& DS, Declarator& D, Parser::DeclSpecContext DSC) -> void;
+
 }  // end namespace clang
 
 #endif

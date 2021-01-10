@@ -2325,9 +2325,10 @@ Decl *Parser::ParseDeclarationAfterDeclaratorAndAttributes(
           StopTokens.push_back(tok::r_paren);
         SkipUntil(StopTokens, StopAtSemi | StopBeforeMatch);
         Actions.ActOnInitializerError(ThisDecl);
-      } else
+      } else {
         Actions.AddInitializerToDecl(ThisDecl, Init.get(),
                                      /*DirectInit=*/false);
+      }
     }
     break;
   }
@@ -3591,9 +3592,9 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
                                            PrevSpec, DiagID, Policy);
       isStorageClass = true;
       break;
-    case tok::kw_var:
     case tok::kw_def:
     case tok::kw_fn:
+    case tok::kw_var:
       isInvalid = DS.SetTypeSpecType(DeclSpec::TST_auto, Loc, PrevSpec, DiagID, Policy);
       isStorageClass = true;
       break;
@@ -4124,7 +4125,7 @@ static auto parse_array_declarator_chunk(Parser& P, DeclSpec& DS, Declarator& D)
 }
 
 // This is my replacement for ParseDeclarationSpecifiers that parses a left-to-right type syntax.
-static auto parse_declaration_specifiers(Parser& P, DeclSpec& DS, Declarator& D, Parser::DeclSpecContext DSC) -> void {
+auto clang::parse_declaration_specifiers(Parser& P, DeclSpec& DS, Declarator& D, Parser::DeclSpecContext DSC) -> void {
         for (;;) {
                 switch (P.Tok.Kind) {
                         case tok::star:
