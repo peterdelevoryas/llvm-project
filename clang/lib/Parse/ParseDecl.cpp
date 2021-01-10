@@ -1693,6 +1693,64 @@ Parser::ParseDeclaration(DeclaratorContext Context, SourceLocation &DeclEnd,
   return Actions.ConvertDeclToDeclGroup(SingleDecl);
 }
 
+static auto parse_var_statement(
+    Parser& P,
+    DeclaratorContext Context,
+    SourceLocation &DeclEnd,
+    Parser::ParsedAttributesWithRange &Attrs,
+    bool RequireSemi,
+    SourceLocation *DeclSpecStart
+) -> Parser::DeclGroupPtrTy {
+    auto DeclStart = P.Tok.getLocation();
+
+    assert(P.Tok.is(tok::kw_var) && "expected var statement");
+    P.ConsumeToken();
+
+    auto DSContext = P.getDeclSpecContextFromDeclaratorContext(Context);
+    ParsingDeclSpec DS(P);
+    if (DeclSpecStart) {
+        DS.SetRangeStart(*DeclSpecStart);
+    }
+    DS.takeAttributesFrom(Attrs);
+
+    ParsingDeclarator D(P, DS, Context);
+
+    assert(P.Tok.is(tok::identifier) && "expected identifier after var keyword");
+    D.SetIdentifier(P.Tok.getIdentifierInfo(), P.Tok.getLocation());
+    P.ConsumeToken();
+
+    if (P.Tok.is(tok::colon)) {
+        P.ConsumeToken();
+        parse_declaration_specifiers(P, DS, D, DSContext);
+    } else {
+        const char* PrevSpec = nullptr;
+        unsigned DiagID = 0;
+        PrintingPolicy Policy = P.Actions.getPrintingPolicy();
+        DS.SetTypeSpecType(DeclSpec::TST_auto, DeclStart, PrevSpec, DiagID, Policy);
+    }
+
+    Decl* Decl = P.Actions.ActOnDeclarator(P.getCurScope(), D);
+
+    if (P.Tok.is(tok::equal)) {
+        D.setHasInitializer();
+        P.TryConsumeToken(tok::equal);
+        ExprResult Init = P.ParseInitializer();
+        P.Actions.AddInitializerToDecl(Decl, Init.get(), false);
+    }
+
+    if (RequireSemi) {
+        P.ExpectAndConsumeSemi(diag::err_expected_semi_declaration);
+    }
+
+    P.Actions.FinalizeDeclaration(Decl);
+    DeclEnd = P.Tok.getLocation();
+
+    SmallVector<clang::Decl *, 8> DeclsInGroup;
+    DeclsInGroup.push_back(Decl);
+
+    return P.Actions.FinalizeDeclaratorGroup(P.getCurScope(), DS, DeclsInGroup);
+}
+
 ///       simple-declaration: [C99 6.7: declaration] [C++ 7p1: dcl.dcl]
 ///         declaration-specifiers init-declarator-list[opt] ';'
 /// [C++11] attribute-specifier-seq decl-specifier-seq[opt]
@@ -1718,6 +1776,11 @@ Parser::DeclGroupPtrTy Parser::ParseSimpleDeclaration(
     DeclaratorContext Context, SourceLocation &DeclEnd,
     ParsedAttributesWithRange &Attrs, bool RequireSemi, ForRangeInit *FRI,
     SourceLocation *DeclSpecStart) {
+
+  if (Tok.is(tok::kw_var)) {
+      return parse_var_statement(*this, Context, DeclEnd, Attrs, RequireSemi, DeclSpecStart);
+  }
+
   // Parse the common declaration-specifiers piece.
   ParsingDeclSpec DS(*this);
 

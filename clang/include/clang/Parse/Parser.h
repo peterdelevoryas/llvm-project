@@ -855,7 +855,6 @@ public:
     return MightBeCXXScopeToken() && TryAnnotateCXXScopeToken(EnteringContext);
   }
 
-private:
   enum AnnotatedNameKind {
     /// Annotation has failed and emitted an error.
     ANK_Error,

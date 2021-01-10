@@ -119,50 +119,6 @@ Parser::ParseStatementOrDeclaration(StmtVector &Stmts,
   return Actions.ProcessStmtAttributes(Res.get(), Attrs, Attrs.Range);
 }
 
-static auto parse_var_statement(Parser& P, Parser::ParsedStmtContext StmtCtx) -> StmtResult {
-    SourceLocation DeclStart = P.Tok.getLocation();
-
-    assert(P.Tok.is(tok::kw_var) && "expected var statement");
-    P.ConsumeToken();
-
-    auto DC = DeclaratorContext::Block;
-    auto DSC = P.getDeclSpecContextFromDeclaratorContext(DC);
-    DeclSpec DS(P.getAttrFactory());
-    Declarator D(DS, DC);
-
-    D.SetIdentifier(P.Tok.getIdentifierInfo(), P.Tok.getLocation());
-    P.TryConsumeToken(tok::identifier);
-
-    if (P.Tok.is(tok::colon)) {
-        P.TryConsumeToken(tok::colon);
-        parse_declaration_specifiers(P, DS, D, DSC);
-    } else {
-        const char* PrevSpec = nullptr;
-        unsigned DiagID = 0;
-        PrintingPolicy Policy = P.Actions.getPrintingPolicy();
-        DS.SetTypeSpecType(DeclSpec::TST_auto, DeclStart, PrevSpec, DiagID, Policy);
-    }
-
-    Decl* Decl = P.Actions.ActOnDeclarator(P.getCurScope(), D);
-
-    if (P.Tok.is(tok::equal)) {
-        D.setHasInitializer();
-        P.TryConsumeToken(tok::equal);
-        ExprResult Init = P.ParseInitializer();
-        P.Actions.AddInitializerToDecl(Decl, Init.get(), false);
-    }
-
-    P.TryConsumeToken(tok::semi);
-
-    P.Actions.FinalizeDeclaration(Decl);
-    SourceLocation DeclEnd = P.Tok.getLocation();
-
-    SmallVector<clang::Decl *, 8> DeclsInGroup;
-    DeclsInGroup.push_back(Decl);
-    auto DeclGroupPtr = P.Actions.FinalizeDeclaratorGroup(P.getCurScope(), DS, DeclsInGroup);
-    return P.Actions.ActOnDeclStmt(DeclGroupPtr, DeclStart, DeclEnd);
-}
-
 namespace {
 class StatementFilterCCC final : public CorrectionCandidateCallback {
 public:
@@ -285,9 +241,6 @@ Retry:
     ParseGNUAttributes(Attrs);
     goto Retry;
   }
-
-  case tok::kw_var:
-    return parse_var_statement(*this, StmtCtx);
 
   case tok::kw_case:                // C99 6.8.1: labeled-statement
     return ParseCaseStatement(StmtCtx);
