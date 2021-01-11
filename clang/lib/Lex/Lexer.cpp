@@ -3208,6 +3208,14 @@ static bool is_end_of_statement(tok::TokenKind kind) {
     case tok::kw_this:
     case tok::kw_true:
     case tok::kw_false:
+    case tok::kw_int:
+    case tok::kw_long:
+    case tok::kw_short:
+    case tok::kw_signed:
+    case tok::kw_unsigned:
+    case tok::kw_void:
+    case tok::kw_char:
+    case tok::kw_float:
     case tok::identifier:
     case tok::numeric_constant:
     case tok::char_constant:
