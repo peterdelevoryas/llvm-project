@@ -2016,7 +2016,7 @@ public:
   ///         assignment-expression
   ///         '{' ...
   ExprResult ParseInitializer() {
-    if (Tok.isNot(tok::l_brace))
+    if (Tok.isNot(tok::l_brace) && Tok.isNot(tok::l_square))
       return ParseAssignmentExpression();
     return ParseBraceInitializer();
   }

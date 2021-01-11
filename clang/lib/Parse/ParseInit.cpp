@@ -432,7 +432,14 @@ ExprResult Parser::ParseInitializerWithPotentialDesignator(
 ExprResult Parser::ParseBraceInitializer() {
   InMessageExpressionRAIIObject InMessage(*this, false);
 
-  BalancedDelimiterTracker T(*this, tok::l_brace);
+  auto open_token = tok::l_brace;
+  auto close_token = tok::r_brace;
+  if (Tok.is(tok::l_square)) {
+      open_token = tok::l_square;
+      close_token = tok::r_square;
+  }
+
+  BalancedDelimiterTracker T(*this, open_token);
   T.consumeOpen();
   SourceLocation LBraceLoc = T.getOpenLocation();
 
@@ -440,12 +447,13 @@ ExprResult Parser::ParseBraceInitializer() {
   /// initializer.
   ExprVector InitExprs;
 
-  if (Tok.is(tok::r_brace)) {
+  if (Tok.is(close_token)) {
     // Empty initializers are a C++ feature and a GNU extension to C.
     if (!getLangOpts().CPlusPlus)
       Diag(LBraceLoc, diag::ext_gnu_empty_initializer);
     // Match the '}'.
-    return Actions.ActOnInitList(LBraceLoc, None, ConsumeBrace());
+    T.consumeClose();
+    return Actions.ActOnInitList(LBraceLoc, None, T.getCloseLocation());
   }
 
   // Enter an appropriate expression evaluation context for an initializer list.
@@ -466,7 +474,7 @@ ExprResult Parser::ParseBraceInitializer() {
         if (Tok.isNot(tok::comma)) break;
         ConsumeToken();
       }
-      if (Tok.is(tok::r_brace)) break;
+      if (Tok.is(close_token)) break;
       continue;
     }
 
@@ -475,10 +483,7 @@ ExprResult Parser::ParseBraceInitializer() {
     // If we know that this cannot be a designation, just parse the nested
     // initializer directly.
     ExprResult SubElt;
-    if (MayBeDesignationStart())
-      SubElt = ParseInitializerWithPotentialDesignator(CodeCompleteDesignation);
-    else
-      SubElt = ParseInitializer();
+    SubElt = ParseInitializer();
 
     if (Tok.is(tok::ellipsis))
       SubElt = Actions.ActOnPackExpansion(SubElt.get(), ConsumeToken());
@@ -500,7 +505,7 @@ ExprResult Parser::ParseBraceInitializer() {
       // immediately, it can't be an error, since there is no other way of
       // leaving this loop except through this if.
       if (Tok.isNot(tok::comma)) {
-        SkipUntil(tok::r_brace, StopBeforeMatch);
+        SkipUntil(close_token, StopBeforeMatch);
         break;
       }
     }
@@ -512,7 +517,7 @@ ExprResult Parser::ParseBraceInitializer() {
     ConsumeToken();
 
     // Handle trailing comma.
-    if (Tok.is(tok::r_brace)) break;
+    if (Tok.is(close_token)) break;
   }
 
   bool closed = !T.consumeClose();

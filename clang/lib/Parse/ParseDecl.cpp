@@ -1732,8 +1732,8 @@ static auto parse_var_statement(
     Decl* Decl = P.Actions.ActOnDeclarator(P.getCurScope(), D);
 
     if (P.Tok.is(tok::equal)) {
+        P.ConsumeToken();
         D.setHasInitializer();
-        P.TryConsumeToken(tok::equal);
         ExprResult Init = P.ParseInitializer();
         if (Init.isInvalid()) {
             P.Actions.ActOnInitializerError(Decl);

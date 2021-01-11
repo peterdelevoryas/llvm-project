@@ -3342,7 +3342,7 @@ LexNextToken:
     // No leading whitespace seen so far.
     Result.clearFlag(Token::LeadingSpace);
 
-    if (curr_indent != 0) {
+    if (curr_indent != 0 && is_end_of_statement(prev_token_kind)) {
         auto start = CurPtr - 1;
         while (*CurPtr == '\n') {
             ++CurPtr;
@@ -3355,13 +3355,10 @@ LexNextToken:
         assert((next_indent % 4) == 0);
         next_indent /= 4;
         BufferPtr = CurPtr;
-        if (is_end_of_statement(prev_token_kind)) {
-          Result.setLength(1);
-          Result.setLocation(getSourceLocation(start, 1));
-          Result.setKind(tok::semi);
-          return true;
-        }
-        goto LexNextToken;
+        Result.setLength(1);
+        Result.setLocation(getSourceLocation(start, 1));
+        Result.setKind(tok::semi);
+        return true;
     }
 
     if (SkipWhitespace(Result, CurPtr, TokAtPhysicalStartOfLine))
