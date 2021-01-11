@@ -1735,7 +1735,11 @@ static auto parse_var_statement(
         D.setHasInitializer();
         P.TryConsumeToken(tok::equal);
         ExprResult Init = P.ParseInitializer();
-        P.Actions.AddInitializerToDecl(Decl, Init.get(), false);
+        if (Init.isInvalid()) {
+            P.Actions.ActOnInitializerError(Decl);
+        } else {
+            P.Actions.AddInitializerToDecl(Decl, Init.get(), false);
+        }
     }
 
     if (RequireSemi) {
