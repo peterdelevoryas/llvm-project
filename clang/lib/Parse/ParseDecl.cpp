@@ -1703,7 +1703,7 @@ static auto parse_var_statement(
 ) -> Parser::DeclGroupPtrTy {
     auto DeclStart = P.Tok.getLocation();
 
-    assert(P.Tok.is(tok::kw_var) && "expected var statement");
+    assert((P.Tok.is(tok::kw_var) || P.Tok.is(tok::kw_let)) && "expected var statement");
     P.ConsumeToken();
 
     auto DSContext = P.getDeclSpecContextFromDeclaratorContext(Context);
@@ -1781,7 +1781,7 @@ Parser::DeclGroupPtrTy Parser::ParseSimpleDeclaration(
     ParsedAttributesWithRange &Attrs, bool RequireSemi, ForRangeInit *FRI,
     SourceLocation *DeclSpecStart) {
 
-  if (Tok.is(tok::kw_var)) {
+  if (Tok.is(tok::kw_var) || Tok.is(tok::kw_let)) {
       return parse_var_statement(*this, Context, DeclEnd, Attrs, RequireSemi, DeclSpecStart);
   }
 
@@ -3662,6 +3662,7 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
     case tok::kw_def:
     case tok::kw_fn:
     case tok::kw_var:
+    case tok::kw_let:
       isInvalid = DS.SetTypeSpecType(DeclSpec::TST_auto, Loc, PrevSpec, DiagID, Policy);
       isStorageClass = true;
       break;
@@ -5298,6 +5299,7 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw__Decimal128:
   case tok::kw___vector:
 
+  case tok::kw_let:
   case tok::kw_var:
   case tok::kw_def:
   case tok::kw_fn:
