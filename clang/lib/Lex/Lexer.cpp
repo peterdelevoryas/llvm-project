@@ -3348,12 +3348,20 @@ LexNextToken:
             ++CurPtr;
         }
         BufferPtr = CurPtr;
-        while (*CurPtr == ' ') {
+
+	auto indent_character = ' ';
+	if (*CurPtr == '\t') {
+		indent_character = '\t';
+	}
+        while (*CurPtr == indent_character) {
             ++CurPtr;
         }
         next_indent = CurPtr - BufferPtr;
-        assert((next_indent % 4) == 0);
-        next_indent /= 4;
+	if (indent_character == ' ') {
+		assert((next_indent % 4) == 0);
+		next_indent /= 4;
+	}
+
         BufferPtr = CurPtr;
         Result.setLength(1);
         Result.setLocation(getSourceLocation(start, 1));
@@ -3912,12 +3920,20 @@ LexNextToken:
             ++CurPtr;
         }
         BufferPtr = CurPtr;
-        while (*CurPtr == ' ') {
+
+	auto indent_character = ' ';
+	if (*CurPtr == '\t') {
+		indent_character = '\t';
+	}
+        while (*CurPtr == indent_character) {
             ++CurPtr;
         }
         next_indent = CurPtr - BufferPtr;
-        assert((next_indent % 4) == 0);
-        next_indent /= 4;
+	if (indent_character == ' ') {
+		assert((next_indent % 4) == 0);
+		next_indent /= 4;
+	}
+
         BufferPtr = CurPtr;
         return true;
       }
