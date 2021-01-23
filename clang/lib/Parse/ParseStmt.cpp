@@ -1183,7 +1183,9 @@ bool Parser::ParseParenExprOrCondition(StmtResult *InitStmt,
                                        SourceLocation *LParenLoc,
                                        SourceLocation *RParenLoc) {
   BalancedDelimiterTracker T(*this, tok::l_paren);
-  T.consumeOpen();
+  if (Tok.is(tok::l_paren)) {
+    T.consumeOpen();
+  }
 
   if (getLangOpts().CPlusPlus)
     Cond = ParseCXXCondition(InitStmt, Loc, CK);
@@ -1209,7 +1211,9 @@ bool Parser::ParseParenExprOrCondition(StmtResult *InitStmt,
   }
 
   // Otherwise the condition is valid or the rparen is present.
-  T.consumeClose();
+  if (Tok.is(tok::r_paren)) {
+    T.consumeClose();
+  }
 
   if (LParenLoc != nullptr) {
     *LParenLoc = T.getOpenLocation();
@@ -1341,12 +1345,6 @@ StmtResult Parser::ParseIfStatement(SourceLocation *TrailingElseLoc) {
                                         : diag::ext_constexpr_if);
     IsConstexpr = true;
     ConsumeToken();
-  }
-
-  if (Tok.isNot(tok::l_paren)) {
-    Diag(Tok, diag::err_expected_lparen_after) << "if";
-    SkipUntil(tok::semi);
-    return StmtError();
   }
 
   bool C99orCXX = getLangOpts().C99 || getLangOpts().CPlusPlus;
@@ -1498,12 +1496,6 @@ StmtResult Parser::ParseSwitchStatement(SourceLocation *TrailingElseLoc) {
   assert(Tok.is(tok::kw_switch) && "Not a switch stmt!");
   SourceLocation SwitchLoc = ConsumeToken();  // eat the 'switch'.
 
-  if (Tok.isNot(tok::l_paren)) {
-    Diag(Tok, diag::err_expected_lparen_after) << "switch";
-    SkipUntil(tok::semi);
-    return StmtError();
-  }
-
   bool C99orCXX = getLangOpts().C99 || getLangOpts().CPlusPlus;
 
   // C99 6.8.4p3 - In C99, the switch statement is a block.  This is
@@ -1585,12 +1577,6 @@ StmtResult Parser::ParseWhileStatement(SourceLocation *TrailingElseLoc) {
   assert(Tok.is(tok::kw_while) && "Not a while stmt!");
   SourceLocation WhileLoc = Tok.getLocation();
   ConsumeToken();  // eat the 'while'.
-
-  if (Tok.isNot(tok::l_paren)) {
-    Diag(Tok, diag::err_expected_lparen_after) << "while";
-    SkipUntil(tok::semi);
-    return StmtError();
-  }
 
   bool C99orCXX = getLangOpts().C99 || getLangOpts().CPlusPlus;
 
@@ -1773,12 +1759,6 @@ StmtResult Parser::ParseForStatement(SourceLocation *TrailingElseLoc) {
   if (Tok.is(tok::kw_co_await))
     CoawaitLoc = ConsumeToken();
 
-  if (Tok.isNot(tok::l_paren)) {
-    Diag(Tok, diag::err_expected_lparen_after) << "for";
-    SkipUntil(tok::semi);
-    return StmtError();
-  }
-
   bool C99orCXXorObjC = getLangOpts().C99 || getLangOpts().CPlusPlus ||
     getLangOpts().ObjC;
 
@@ -1804,7 +1784,9 @@ StmtResult Parser::ParseForStatement(SourceLocation *TrailingElseLoc) {
   ParseScope ForScope(this, ScopeFlags);
 
   BalancedDelimiterTracker T(*this, tok::l_paren);
-  T.consumeOpen();
+  if (Tok.is(tok::l_paren)) {
+    T.consumeOpen();
+  }
 
   ExprResult Value;
 
@@ -2006,7 +1988,7 @@ StmtResult Parser::ParseForStatement(SourceLocation *TrailingElseLoc) {
       ConsumeToken();
     }
 
-    if (Tok.isNot(tok::r_paren)) {   // for (...;...;)
+    if (Tok.isNot(tok::r_paren) && Tok.isNot(tok::l_brace)) {   // for (...;...;)
       ExprResult Third = ParseExpression();
       // FIXME: The C++11 standard doesn't actually say that this is a
       // discarded-value expression, but it clearly should be.
@@ -2014,7 +1996,9 @@ StmtResult Parser::ParseForStatement(SourceLocation *TrailingElseLoc) {
     }
   }
   // Match the ')'.
-  T.consumeClose();
+  if (Tok.is(tok::r_paren)) {
+    T.consumeClose();
+  }
 
   // C++ Coroutines [stmt.iter]:
   //   'co_await' can only be used for a range-based for statement.

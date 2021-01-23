@@ -1717,6 +1717,11 @@ Parser::DeclGroupPtrTy Parser::ParseSimpleDeclaration(
     DeclaratorContext Context, SourceLocation &DeclEnd,
     ParsedAttributesWithRange &Attrs, bool RequireSemi, ForRangeInit *FRI,
     SourceLocation *DeclSpecStart) {
+
+  if (Tok.is(tok::kw_let)) {
+    return ParseLet(Context, DeclEnd, Attrs, RequireSemi, DeclSpecStart);
+  }
+
   // Parse the common declaration-specifiers piece.
   ParsingDeclSpec DS(*this);
 
@@ -4111,6 +4116,16 @@ void Parser::ParseStructDeclaration(
     return ParseStructDeclaration(DS, FieldsCallback);
   }
 
+  if (Tok.is(tok::identifier) && NextToken().is(tok::colon)) {
+    ParsingFieldDeclarator F(*this, DS);
+    F.D.SetIdentifier(Tok.getIdentifierInfo(), Tok.getLocation());
+    ConsumeToken();
+    ConsumeToken();
+    ParseDeclSpecL2R(F.D);
+    FieldsCallback(F);
+    return;
+  }
+
   // Parse leading attributes.
   ParsedAttributesWithRange Attrs(AttrFactory);
   MaybeParseCXX11Attributes(Attrs);
@@ -5109,6 +5124,8 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw___thread:
   case tok::kw_thread_local:
   case tok::kw__Thread_local:
+  case tok::kw_let:
+  case tok::kw_type:
 
     // Modules
   case tok::kw___module_private__:

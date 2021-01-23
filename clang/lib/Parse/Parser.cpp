@@ -960,6 +960,19 @@ Parser::ParseExternalDeclaration(ParsedAttributesWithRange &attrs,
     SkipUntil(tok::semi);
     return nullptr;
 
+  case tok::kw_fn:
+    SingleDecl = ParseFnDecl();
+    break;
+
+  case tok::kw_let: {
+    SourceLocation DeclEnd;
+    return ParseLet(DeclaratorContext::File, DeclEnd, attrs, true, nullptr);
+  }
+
+  case tok::kw_type:
+    SingleDecl = ParseTypeDecl();
+    break;
+
   default:
   dont_know:
     if (Tok.isEditorPlaceholder()) {
@@ -2348,6 +2361,253 @@ Parser::DeclGroupPtrTy Parser::ParseModuleDecl(bool IsFirstDecl) {
   ExpectAndConsumeSemi(diag::err_module_expected_semi);
 
   return Actions.ActOnModuleDecl(StartLoc, ModuleLoc, MDK, Path, IsFirstDecl);
+}
+
+Decl *Parser::ParseTypeDecl() {
+  SourceLocation Loc = Tok.getLocation();
+  const char *PrevSpec = nullptr;
+  unsigned DiagID = 0;
+  PrintingPolicy Policy = Actions.getPrintingPolicy();
+
+  ParsingDeclSpec DS(*this);
+  DS.SetStorageClassSpec(Actions, DeclSpec::SCS_typedef, Loc, PrevSpec, DiagID, Policy);
+  ParsingDeclarator D(*this, DS, DeclaratorContext::File);
+
+  assert(Tok.is(tok::kw_type));
+  ConsumeToken();
+
+  if (Tok.isNot(tok::identifier)) {
+    Diag(Tok, diag::err_expected) << tok::identifier;
+    return nullptr;
+  }
+  D.SetIdentifier(Tok.getIdentifierInfo(), Tok.getLocation());
+  ConsumeToken();
+
+  if (Tok.isNot(tok::equal)) {
+    Diag(Tok, diag::err_expected) << tok::equal;
+    return nullptr;
+  }
+  ConsumeToken();
+
+  ParseDeclSpecL2R(D);
+
+  auto Decl = Actions.ActOnDeclarator(getCurScope(), D);
+  ExpectAndConsumeSemi(diag::err_expected_semi_declaration);
+
+  Actions.FinalizeDeclaration(Decl);
+
+  return Decl;
+}
+
+Decl *Parser::ParseFnDecl() {
+  SourceLocation StartLoc = Tok.getLocation();
+
+  ParsingDeclSpec DS(*this);
+  const char *PrevSpec = nullptr;
+  unsigned DiagId;
+  auto PrintingPolicy = Actions.getPrintingPolicy();
+  DS.SetTypeSpecType(TST_auto, StartLoc, PrevSpec, DiagId, PrintingPolicy);
+
+  ParsingDeclarator D(*this, DS, DeclaratorContext::File);
+  BalancedDelimiterTracker T(*this, tok::l_paren);
+
+  if (ExpectAndConsume(tok::kw_fn)) {
+    return nullptr;
+  }
+
+  if (Tok.isNot(tok::identifier)) {
+    Diag(Tok, diag::err_expected) << tok::identifier;
+    return nullptr;
+  }
+  D.SetIdentifier(Tok.getIdentifierInfo(), Tok.getLocation());
+  ConsumeToken();
+
+  T.consumeOpen();
+  ParseScope PrototypeScope(this, Scope::FunctionPrototypeScope |
+                                  Scope::DeclScope |
+                                  Scope::FunctionDeclarationScope);
+
+  SmallVector<DeclaratorChunk::ParamInfo, 16> ParamInfo;
+  while (Tok.isNot(tok::r_paren)) {
+    DeclSpec DS(AttrFactory);
+    Declarator D(DS, DeclaratorContext::Prototype); // DeclaratorContext::Prototype?
+
+    if (Tok.isNot(tok::identifier)) {
+      Diag(Tok, diag::err_expected) << tok::identifier;
+      return nullptr;
+    }
+    D.SetIdentifier(Tok.getIdentifierInfo(), Tok.getLocation());
+    ConsumeToken();
+
+    if (Tok.isNot(tok::colon)) {
+      Diag(Tok, diag::err_expected) << tok::colon;
+      return nullptr;
+    }
+    ConsumeToken();
+
+    ParseDeclSpecL2R(D);
+    Decl* Decl = Actions.ActOnParamDeclarator(getCurScope(), D);
+    ParamInfo.push_back(DeclaratorChunk::ParamInfo(D.getIdentifier(),
+                                                   D.getIdentifierLoc(),
+                                                   Decl));
+
+    if (!Tok.is(tok::comma)) {
+      break;
+    }
+    ConsumeToken();
+  }
+
+  PrototypeScope.Exit();
+  T.consumeClose();
+
+  if (Tok.isNot(tok::arrow)) {
+    Diag(Tok, diag::err_expected) << tok::arrow;
+    return nullptr;
+  }
+  ConsumeToken();
+  SourceLocation ReturnTypeStart = Tok.getLocation();
+  TypeResult ReturnType = ParseTrailingReturnTypeL2R();
+  SourceLocation EndLoc = Tok.getLocation();
+
+  D.AddTypeInfo(DeclaratorChunk::getFunction(
+                  true, // HasProto
+                  false, // IsAmbiguous
+                  T.getOpenLocation(),
+                  ParamInfo.data(),
+                  ParamInfo.size(),
+                  SourceLocation(), // EllipsisLoc
+                  T.getCloseLocation(),
+                  true, // RefQualifierIsLValueRef
+                  SourceLocation(), // RefQualifierLoc
+                  SourceLocation(), // MutableLoc
+                  EST_None, // ESpecType
+                  SourceRange(), // ESpecRange
+                  nullptr, // DynamicExceptions.data
+                  nullptr, // DynamicExceptionRanges.data
+                  0, // DynamicExceptions.size
+                  nullptr, // NoexceptExpr
+                  nullptr, // ExceptionSpecTokens
+                  {}, // DeclsInPrototype
+                  StartLoc,
+                  EndLoc,
+                  D,
+                  ReturnType,
+                  ReturnTypeStart,
+                  &DS),
+                ParsedAttributesWithRange(AttrFactory), EndLoc);
+
+  Decl *Decl = Actions.ActOnDeclarator(getCurScope(), D);
+  Decl = Actions.ActOnStartOfFunctionDef(getCurScope(), Decl);
+  unsigned ScopeFlags = Scope::FnScope | Scope::DeclScope |
+                        Scope::CompoundStmtScope;
+  ParseScope BodyScope(this, ScopeFlags);
+  StmtResult Body(ParseCompoundStatementBody());
+  BodyScope.Exit();
+  return Actions.ActOnFinishFunctionBody(Decl, Body.get());
+}
+
+Parser::DeclGroupPtrTy Parser::ParseLet(DeclaratorContext Context,
+                                        SourceLocation &DeclEnd,
+                                        ParsedAttributesWithRange &Attrs,
+                                        bool RequireSemi,
+                                        SourceLocation *DeclSpecStart) {
+  auto DC = DeclaratorContext::Block;
+  ParsingDeclSpec DS(*this);
+  DS.takeAttributesFrom(Attrs);
+  ParsingDeclarator D(*this, DS, DC);
+
+  assert(Tok.is(tok::kw_let));
+  SourceLocation Start = ConsumeToken();
+  DS.SetRangeStart(DeclSpecStart ? *DeclSpecStart : Start);
+
+  if (Tok.isNot(tok::identifier)) {
+    Diag(Tok, diag::err_expected) << tok::identifier;
+    return nullptr;
+  }
+  D.SetIdentifier(Tok.getIdentifierInfo(), Tok.getLocation());
+  ConsumeToken();
+
+  if (Tok.is(tok::colon)) {
+    ConsumeToken();
+    ParseDeclSpecL2R(D);
+  } else {
+    const char *PrevSpec = nullptr;
+    unsigned DiagID = 0;
+    PrintingPolicy Policy = Actions.getPrintingPolicy();
+    DS.SetTypeSpecType(DeclSpec::TST_auto, Start, PrevSpec, DiagID, Policy);
+  }
+
+  auto Decl = Actions.ActOnDeclarator(getCurScope(), D);
+
+  if (Tok.is(tok::equal)) {
+    ConsumeToken();
+    D.setHasInitializer();
+    ExprResult E = ParseInitializer();
+    if (E.isInvalid()) {
+      Actions.ActOnInitializerError(Decl);
+      return nullptr;
+    }
+    Actions.AddInitializerToDecl(Decl, E.get(), false);
+  }
+
+  if (RequireSemi) {
+    ExpectAndConsumeSemi(diag::err_expected_semi_declaration);
+  }
+  DeclEnd = Tok.getLocation();
+  Actions.FinalizeDeclaration(Decl);
+
+  SmallVector<clang::Decl*, 8> Decls;
+  Decls.push_back(Decl);
+  return Actions.FinalizeDeclaratorGroup(getCurScope(), DS, Decls);
+}
+
+TypeResult Parser::ParseTrailingReturnTypeL2R() {
+  DeclSpec DS(getAttrFactory());
+  Declarator D(DS, DeclaratorContext::TrailingReturn);
+  ParseDeclSpecL2R(D);
+  return getActions().ActOnTypeName(getCurScope(), D);
+}
+
+void Parser::ParseDeclSpecL2R(Declarator &D) {
+  DeclSpec &DS = D.getMutableDeclSpec();
+  auto DC = D.getContext();
+  auto DSC = getDeclSpecContextFromDeclaratorContext(DC);
+
+  for (;;) {
+    switch (Tok.getKind()) {
+      case tok::star: {
+        SourceLocation Loc = ConsumeToken();
+        D.AddTypeInfo(DeclaratorChunk::getPointer(DS.getTypeQualifiers(),
+                                                  Loc,
+                                                  DS.getConstSpecLoc(),
+                                                  DS.getVolatileSpecLoc(),
+                                                  DS.getRestrictSpecLoc(),
+                                                  DS.getAtomicSpecLoc(),
+                                                  DS.getUnalignedSpecLoc()),
+                      Loc);
+        continue;
+      }
+      case tok::l_square: {
+        BalancedDelimiterTracker T(*this, tok::l_square);
+        T.consumeOpen();
+        ExprResult N = ParseConstantExpression();
+        T.consumeClose();
+        D.AddTypeInfo(DeclaratorChunk::getArray(DS.getTypeQualifiers(),
+                                                false,
+                                                false,
+                                                N.get(),
+                                                T.getOpenLocation(),
+                                                T.getCloseLocation()),
+                      std::move(DS.getAttributes()),
+                      T.getCloseLocation());
+        continue;
+      }
+      default:
+        break;
+    }
+    break;
+  }
+  ParseDeclarationSpecifiers(DS, {}, AS_none, DSC, nullptr);
 }
 
 /// Parse a module import declaration. This is essentially the same for

@@ -2363,6 +2363,16 @@ private:
       DeclSpec &DS, AccessSpecifier AS, DeclSpecContext DSContext,
       LateParsedAttrList *LateAttrs = nullptr);
 
+  Decl *ParseFnDecl();
+  Decl *ParseTypeDecl();
+  void ParseDeclSpecL2R(Declarator &D);
+  TypeResult ParseTrailingReturnTypeL2R();
+  DeclGroupPtrTy ParseLet(DeclaratorContext Context,
+                          SourceLocation &DeclEnd,
+                          ParsedAttributesWithRange &Attrs,
+                          bool RequireSemi,
+                          SourceLocation *DeclSpecStart);
+
   void ParseSpecifierQualifierList(
       DeclSpec &DS, AccessSpecifier AS = AS_none,
       DeclSpecContext DSC = DeclSpecContext::DSC_normal);
