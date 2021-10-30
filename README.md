@@ -1,3 +1,48 @@
+# peterd's fork
+
+Building instructions:
+
+```
+git clone https://github.com/peterdelevoryas/llvm-project
+cd llvm-project
+cmake -S llvm -B build -G Ninja -DLLVM_ENABLE_PROJECTS=clang \
+      -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD=X86
+cd build
+ninja
+export OSX=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/
+./bin/clang test.c -L$OSX_SDK/usr/lib -I$OSX_SDK/usr/include \
+                   -Wno-nullability-completeness -DTARGET_OS_IPHONE=0 -std=gnu11
+#                  ^^^^^^^Needed because of some random Xcode bugs or something.
+```
+
+Now you can replace `a->x` with `a.x`:
+
+```c
+#include <stdio.h>
+#define let __auto_type
+#define Vector3(x, y, z) ((Vector3){(x), (y), (z)})
+
+typedef struct Vector3 Vector3;
+typedef float f32;
+
+struct Vector3 {
+    f32 x;
+    f32 y;
+    f32 z;
+};
+
+f32 VectorProduct3(Vector3* a, Vector3* b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+int main() {
+    let x = Vector3(1.0, 2.0, 3.0);
+    let y = Vector3(4.0, 5.0, 6.0);
+    let z = VectorProduct3(&x, &y);
+    printf("%f\n", z);
+}
+```
+
 # The LLVM Compiler Infrastructure
 
 This directory and its sub-directories contain source code for LLVM,

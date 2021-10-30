@@ -484,26 +484,6 @@ Sema::ActOnDependentMemberExpr(Expr *BaseExpr, QualType BaseType,
                                NamedDecl *FirstQualifierInScope,
                                const DeclarationNameInfo &NameInfo,
                                const TemplateArgumentListInfo *TemplateArgs) {
-  // Even in dependent contexts, try to diagnose base expressions with
-  // obviously wrong types, e.g.:
-  //
-  // T* t;
-  // t.f;
-  //
-  // In Obj-C++, however, the above expression is valid, since it could be
-  // accessing the 'f' property if T is an Obj-C interface. The extra check
-  // allows this, while still reporting an error if T is a struct pointer.
-  if (!IsArrow) {
-    const PointerType *PT = BaseType->getAs<PointerType>();
-    if (PT && (!getLangOpts().ObjC ||
-               PT->getPointeeType()->isRecordType())) {
-      assert(BaseExpr && "cannot happen with implicit member accesses");
-      Diag(OpLoc, diag::err_typecheck_member_reference_struct_union)
-        << BaseType << BaseExpr->getSourceRange() << NameInfo.getSourceRange();
-      return ExprError();
-    }
-  }
-
   assert(BaseType->isDependentType() ||
          NameInfo.getName().isDependentName() ||
          isDependentScopeSpecifier(SS));
@@ -1628,20 +1608,13 @@ static ExprResult LookupMemberExpr(Sema &S, LookupResult &R,
   // Failure cases.
  fail:
 
-  // Recover from dot accesses to pointers, e.g.:
-  //   type *foo;
-  //   foo.bar
-  // This is actually well-formed in two cases:
-  //   - 'type' is an Objective C type
-  //   - 'bar' is a pseudo-destructor name which happens to refer to
-  //     the appropriate pointer type
+  // Normally Clang treats this as a failure, but I like auto-deref: Clang
+  // already has auto-deref supported because it auto-deref's for the purposes
+  // of continuing parsing/type-checking, so I just removed the error
+  // diagnostic.
   if (const PointerType *Ptr = BaseType->getAs<PointerType>()) {
-    if (!IsArrow && Ptr->getPointeeType()->isRecordType() &&
+    if (!IsArrow &&
         MemberName.getNameKind() != DeclarationName::CXXDestructorName) {
-      S.Diag(OpLoc, diag::err_typecheck_member_reference_suggestion)
-          << BaseType << int(IsArrow) << BaseExpr.get()->getSourceRange()
-          << FixItHint::CreateReplacement(OpLoc, "->");
-
       // Recurse as an -> access.
       IsArrow = true;
       return LookupMemberExpr(S, R, BaseExpr, IsArrow, OpLoc, SS,
